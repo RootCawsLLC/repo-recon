@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      # actions/setup-node v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ matrix.node }}
+      # No dependencies to install - repo-recon is pure Node.
+      - name: Unit tests
+        run: node --test "tests/*.test.mjs"
+      - name: CLI smoke test (offline scan of the fixture)
+        run: node bin/repo-recon.mjs tests/fixtures/vuln-repo --offline --format markdown
+
+  self-scan:
+    name: dogfood (scan self, informational)
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      # actions/setup-node v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      # repo-recon scanning itself will flag its own test fixtures (which plant
+      # deliberate secrets/injection) and its own detection-pattern source, so
+      # this is informational, not a gate. It proves the CLI runs end-to-end.
+      - name: Scan this repo (report only)
+        run: node bin/repo-recon.mjs . --offline --format markdown

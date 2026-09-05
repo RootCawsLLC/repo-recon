@@ -1,0 +1,16 @@
+repo-recon
+Copyright 2026 RootCawsLLC
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product has no bundled third-party code (it has zero runtime
+dependencies). At runtime it queries the following public data sources; each
+remains the property of its respective provider and is used under its own terms:
+
+  - OSV.dev (Open Source Vulnerabilities) advisory database, operated by the
+    Open Source Security Foundation (OpenSSF) - https://osv.dev
+  - CISA Known Exploited Vulnerabilities (KEV) Catalog, U.S. Cybersecurity and
+    Infrastructure Security Agency - https://www.cisa.gov/kev
+  - EPSS (Exploit Prediction Scoring System), FIRST.org - https://www.first.org/epss
+
+OWASP Top 10 category names are referenced under the OWASP Foundation's terms.

@@ -1,5 +1,8 @@
 # repo-recon
 
+[![CI](https://github.com/RootCawsLLC/repo-recon/actions/workflows/ci.yml/badge.svg)](https://github.com/RootCawsLLC/repo-recon/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 **Reconnaissance on a Git repository before you trust it.**
 
 `repo-recon` clones a repository (or reads a local checkout), runs seven scanners,
