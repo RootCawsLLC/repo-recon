@@ -122,6 +122,43 @@ async function collectPackages(dir, files) {
   return [...seen.values()];
 }
 
+// Fallback when there is no lockfile: read the declared ranges from package.json
+// directly. We cannot know the exact installed version, so we take the lower
+// bound of each range as an approximation and mark the result unresolved. A repo
+// with no lockfile stops being a blind spot; it just carries a caveat.
+function coerceVersion(range) {
+  if (range == null) return null;
+  const s = String(range).trim();
+  if (!s || /^(file:|link:|workspace:|git|github:|https?:|npm:|\*|latest|x|~x)/i.test(s)) return null;
+  const m = s.match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/); // first semver in ^1.2.3, >=1.2.3, 1.2.3 - 2, ...
+  if (!m) return null;
+  return { version: m[1], exact: /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(s) };
+}
+
+async function collectFromManifests(files) {
+  const out = [];
+  const seen = new Set();
+  const manifests = files.filter((f) => f.rel === 'package.json' || f.rel.endsWith('/package.json'));
+  for (const mf of manifests) {
+    let json;
+    try {
+      json = JSON.parse(await readFile(mf.abs, 'utf8'));
+    } catch {
+      continue;
+    }
+    const deps = { ...json.dependencies, ...json.devDependencies, ...json.optionalDependencies };
+    for (const [name, range] of Object.entries(deps)) {
+      const v = coerceVersion(range);
+      if (!v) continue;
+      const key = `${name}@${v.version}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ name, version: v.version, ecosystem: 'npm', source: mf.rel, exact: v.exact, declared: range });
+    }
+  }
+  return out;
+}
+
 // CVE ids can live in several places on an OSV record: `aliases`, `related`, or
 // only in the reference URLs (as with the React2Shell advisory, whose CVE is not
 // an alias). Gather from all three structured fields - but not from free-text
@@ -165,8 +202,20 @@ async function fetchJson(url, opts, timeoutMs = 20000) {
 
 export async function scan(ctx) {
   const findings = [];
-  const packages = await collectPackages(ctx.dir, ctx.files);
-  const summary = { packagesChecked: packages.length, vulnerabilities: 0, network: false, error: null };
+  let packages = await collectPackages(ctx.dir, ctx.files);
+  let resolved = true;
+  if (packages.length === 0) {
+    // No lockfile - fall back to declared package.json ranges (lower bound).
+    packages = await collectFromManifests(ctx.files);
+    resolved = false;
+  }
+  const summary = {
+    packagesChecked: packages.length,
+    resolved,
+    vulnerabilities: 0,
+    network: false,
+    error: null,
+  };
 
   if (packages.length === 0) return { findings, summary };
   if (ctx.offline) {
@@ -228,6 +277,9 @@ export async function scan(ctx) {
     // one finding per (advisory, package) pair, like the report
     const uniquePkgs = new Map(pkgs.map((p) => [`${p.name}@${p.version}`, p]));
     for (const p of uniquePkgs.values()) {
+      const unresolvedNote = resolved
+        ? ''
+        : ` No lockfile was present, so this is the lower bound of the declared range ("${p.declared}") - the installed version may differ; run "npm install" and re-scan to confirm.`;
       const finding = makeFinding({
         tool: 'deps',
         severity,
@@ -237,10 +289,12 @@ export async function scan(ctx) {
         location: { file: p.source, line: null, snippet: `${p.name}@${p.version}` },
         detail:
           (vuln.summary || `Known advisory ${id} affects ${p.name}@${p.version}.`) +
-          ` Source: OSV.dev advisory database.`,
+          ` Source: OSV.dev advisory database.` +
+          unresolvedNote,
         remediation: `Upgrade "${p.name}" to a patched version. See https://osv.dev/vulnerability/${id}`,
       });
       finding.cves = cves;
+      finding.confidence = resolved ? 'high' : 'medium';
       findings.push(finding);
     }
   }

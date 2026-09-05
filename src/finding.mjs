@@ -37,6 +37,14 @@ export function makeFinding(f) {
     },
     detail: f.detail || '',
     remediation: f.remediation || '',
+    // How much to trust the finding before a reviewer opens the file:
+    //   high   - an exact, unambiguous match (a pinned vulnerable version, a
+    //            provider-format key, a privileged container directive)
+    //   medium - a strong pattern that still needs the file to confirm intent
+    //   low    - a weak signal / context
+    // The verification layer (skill) still confirms everything; this just tells
+    // a reader which raw findings are near-certain vs. worth a closer look.
+    confidence: f.confidence || 'high',
     contextOnly: Boolean(f.contextOnly),
     // Filled in by the AI-verification layer (the skill). Raw CLI output leaves
     // these at their defaults - nothing is "verified" until a reviewer confirms it.

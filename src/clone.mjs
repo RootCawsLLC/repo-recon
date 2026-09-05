@@ -37,7 +37,7 @@ async function isDirectory(p) {
  * `ref` is { owner, repo, host } when it can be determined, else null.
  * The caller must await cleanup() when done.
  */
-export async function resolveTarget(input, { onLog } = {}) {
+export async function resolveTarget(input, { onLog, history = false } = {}) {
   const log = onLog || (() => {});
 
   // A bare owner/repo could also be a real local dir named like that; prefer
@@ -62,9 +62,12 @@ export async function resolveTarget(input, { onLog } = {}) {
 
   const url = /^https?:\/\//i.test(input) ? input : `https://github.com/${ref.owner}/${ref.repo}.git`;
   const dir = await mkdtemp(join(tmpdir(), 'repo-recon-'));
-  log(`Cloning ${ref.owner}/${ref.repo} (shallow, latest commit only)...`);
+  const cloneArgs = history
+    ? ['clone', '--quiet', url, dir] // full history for the --history scan
+    : ['clone', '--depth', '1', '--quiet', url, dir];
+  log(`Cloning ${ref.owner}/${ref.repo} (${history ? 'full history' : 'shallow, latest commit only'})...`);
   try {
-    await exec('git', ['clone', '--depth', '1', '--quiet', url, dir], { timeout: 120000 });
+    await exec('git', cloneArgs, { timeout: 180000 });
   } catch (err) {
     await rm(dir, { recursive: true, force: true });
     throw new Error(`git clone failed for ${url}: ${err.stderr || err.message}`);

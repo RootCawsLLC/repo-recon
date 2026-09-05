@@ -75,7 +75,9 @@ Set `GITHUB_TOKEN` (or `REPO_RECON_GITHUB_TOKEN`) to raise the GitHub API rate l
 | `secrets` | hardcoded credentials — AWS/GitHub/Slack/Stripe/Google keys, private-key blocks, JWTs, `secret = "literal"` assignments | A02 |
 | `dep-check` | known-vulnerable dependency versions, via the OSV.dev advisory DB (npm, PyPI, Go), **enriched with CISA KEV** (known-exploited → escalated to CRITICAL, tagged `[KEV]`) and **EPSS** (30-day exploitation probability) | A06 |
 | `heuristics` | `curl \| bash`, `eval(atob(...))`, remote `require()`, install-time scripts that fetch/exec, `pull_request_target` + secrets, cloud-credential file reads, cryptominer strings, typosquatted deps | A08 |
-| `infra` | container & IaC misconfigs — unpinned/`:latest` base images, containers running as root, `ADD <url>`, secrets baked into image layers, privileged compose services, mounted docker socket, public RDS, public S3 ACLs, `0.0.0.0/0` security groups, `Action:"*"` IAM | A05 |
+| `infra` | container & IaC misconfigs — unpinned/`:latest` base images, containers running as root, `ADD <url>`, secrets baked into image layers, privileged compose services, mounted docker socket, public RDS, public S3 ACLs, `0.0.0.0/0` security groups (port-aware), `Action:"*"` IAM (condition-aware) | A05 |
+| `code` | dangerous sinks fed *dynamic* input — raw/`Unsafe` SQL, interpolated SQL, `dangerouslySetInnerHTML`/`innerHTML`, `exec`/`execSync`, `eval` (medium-confidence leads; pair with Semgrep/CodeQL for proof) | A03 |
+| `secrets-history` | with `--history`, high-confidence secrets in *any* past commit — the committed-then-deleted credential still reachable from git history | A02 |
 | `author-check` | repo age, stars/forks, license, owner account age and track record | A08 |
 | `issues-check` | open issues whose titles read like unresolved security/data reports | — |
 | `privacy` | 10 data-handling categories — PII in fixtures, personal data in logs, telemetry SDKs, outbound calls, disk/browser writes, retention/deletion, encryption, cross-border regions, privacy docs | A09 |
@@ -97,15 +99,25 @@ hidden by an otherwise-clean repo:
 
 Context-only findings (repo age, privacy notes) are reported but do not lower the score.
 
-## Limitations
+## Limitations & how they're mitigated
 
-- A shallow (`--depth 1`) clone: full commit history is not scanned for leaked data.
-- A static scan sees sinks, not always sources. For taint-sensitive classes (raw
-  SQL, XSS, `exec`, LLM output) pair it with Semgrep or CodeQL before trusting a pass.
-- The dependency scanner reads lockfiles; a repo with no lockfile has no resolved
-  versions to check.
-- Findings are heuristic until verified. Run through the skill (or review by hand)
-  before acting on any single one.
+- **Git history.** The default scan reads only the working tree (a shallow clone).
+  Pass `--history` to clone full history and scan every commit's added lines for
+  leaked secrets — the classic committed-then-deleted credential that still sits in
+  history. Bounded to the high-confidence provider formats, to keep history noise-free.
+- **Sinks vs. sources.** A static scan sees a dangerous sink, not always the taint
+  path into it. The `code` scanner surfaces the sinks that take *dynamic* input
+  (raw SQL, XSS, `exec`, `eval`) as `confidence: medium` leads. For a *proven* taint
+  path on a security-critical change, still pair it with Semgrep or CodeQL.
+- **No lockfile.** With a lockfile the dependency scan uses exact resolved versions.
+  Without one it falls back to the declared `package.json` ranges (lower bound),
+  marked `resolved: false` with a caveat on each finding — a repo with no lockfile is
+  no longer a blind spot, just a lower-confidence check. Run `npm install` and
+  re-scan to confirm.
+- **Heuristic until verified.** Every finding carries a `confidence` (`high`/`medium`):
+  the high ones are near-certain (a pinned vulnerable version, a provider-format key,
+  a privileged container directive), the medium ones are worth a closer look. The
+  skill still verifies each against the real file before it counts.
 
 ## Prior art
 

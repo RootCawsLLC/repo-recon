@@ -20,6 +20,8 @@ Options:
   -f, --format <fmt>   terminal (default) | json | markdown
   -o, --out <file>     write the report to a file instead of stdout
       --offline        skip network scanners (OSV.dev, GitHub API)
+      --history        also scan full git history for leaked secrets
+                       (clones full history for a remote target; slower)
       --fail-under <n> exit non-zero if the grade score is below n (CI gate)
       --fail-on <sev>  exit non-zero if any finding is at or above this severity
                        (CRITICAL|HIGH|MEDIUM|LOW)
@@ -56,6 +58,9 @@ function parseArgs(argv) {
         break;
       case '--offline':
         opts.offline = true;
+        break;
+      case '--history':
+        opts.history = true;
         break;
       case '--fail-under':
         opts.failUnder = Number(argv[++i]);
@@ -98,7 +103,7 @@ async function main() {
   const log = opts.quiet ? () => {} : (m) => process.stderr.write(`  ${m}\n`);
   let report;
   try {
-    report = await scanRepo(opts.target, { offline: opts.offline, onLog: log });
+    report = await scanRepo(opts.target, { offline: opts.offline, history: opts.history, onLog: log });
   } catch (err) {
     console.error(`repo-recon: ${err.message}`);
     return 2;

@@ -79,6 +79,7 @@ export async function scan(ctx) {
           makeFinding({
             tool: 'agent-targeting',
             severity: agentReadable ? 'HIGH' : 'MEDIUM',
+            confidence: 'medium',
             title: 'Prompt-injection phrasing addressed to an AI agent',
             owasp: 'A03',
             cwe: 'CWE-1427',

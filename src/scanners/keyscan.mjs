@@ -2,8 +2,9 @@ import { makeFinding, maskSecret } from '../finding.mjs';
 import { lineAt } from '../walk.mjs';
 
 // High-confidence provider credential formats. A hit here is almost never a
-// false positive, so it carries real severity on its own.
-const STRONG = [
+// false positive, so it carries real severity on its own. Exported so the git
+// history scanner can reuse exactly these formats.
+export const STRONG = [
   { name: 'AWS access key id', re: /\bAKIA[0-9A-Z]{16}\b/g, sev: 'HIGH' },
   { name: 'AWS secret access key', re: /\baws_secret_access_key\s*[:=]\s*["']?([A-Za-z0-9/+]{40})["']?/gi, sev: 'CRITICAL', group: 1 },
   { name: 'GitHub token', re: /\b(gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,})\b/g, sev: 'HIGH' },
@@ -70,6 +71,7 @@ export async function scan(ctx) {
         makeFinding({
           tool: 'secrets',
           severity: 'MEDIUM',
+          confidence: 'medium',
           title: 'Possible hardcoded secret: Password/Secret Assignment',
           owasp: 'A02',
           cwe: 'CWE-798',

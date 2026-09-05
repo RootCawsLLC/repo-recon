@@ -12,12 +12,17 @@ import * as issues from './scanners/issues.mjs';
 import * as privacy from './scanners/privacy.mjs';
 import * as agent from './scanners/agent.mjs';
 import * as infra from './scanners/infra.mjs';
+import * as code from './scanners/code.mjs';
+import * as history from './scanners/history.mjs';
 
 // Tool label -> module. Order here is the order they run and report in.
+// `secrets-history` runs only when --history is passed (it is a no-op otherwise).
 const SCANNERS = [
   ['secrets', keyscan],
+  ['secrets-history', history],
   ['dep-check', deps],
   ['heuristics', heuristics],
+  ['code', code],
   ['infra', infra],
   ['author-check', author],
   ['issues-check', issues],
@@ -36,7 +41,7 @@ const SCANNERS = [
  */
 export async function scanRepo(input, opts = {}) {
   const log = opts.onLog || (() => {});
-  const target = await resolveTarget(input, { onLog: log });
+  const target = await resolveTarget(input, { onLog: log, history: Boolean(opts.history) });
   try {
     log('Walking files...');
     const { files, count } = await walk(target.dir);
@@ -57,6 +62,7 @@ export async function scanRepo(input, opts = {}) {
       ref: target.ref,
       kind: target.kind,
       offline: Boolean(opts.offline),
+      history: Boolean(opts.history),
       onLog: log,
     };
 
