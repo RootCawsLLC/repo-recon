@@ -110,7 +110,13 @@ export async function scan(ctx) {
       p.re.lastIndex = 0;
       let m;
       let hits = 0;
+      const seenLines = new Set();
       while ((m = p.re.exec(text)) != null && hits < 20) {
+        const line = lineAt(text, m.index);
+        // Collapse repeated matches of the same pattern on one line - a denylist
+        // (or our own regex source) that lists many keywords is one finding, not many.
+        if (seenLines.has(line)) continue;
+        seenLines.add(line);
         hits++;
         findings.push(
           makeFinding({
@@ -119,7 +125,7 @@ export async function scan(ctx) {
             title: p.title,
             owasp: p.owasp,
             cwe: p.cwe,
-            location: { file: file.rel, line: lineAt(text, m.index), snippet: m[0].slice(0, 120) },
+            location: { file: file.rel, line, snippet: m[0].slice(0, 120) },
             detail: p.detail,
             remediation: p.remediation,
           }),
