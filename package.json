@@ -1,0 +1,41 @@
+{
+  "name": "repo-recon",
+  "version": "0.1.0",
+  "description": "Reconnaissance on a Git repository before you trust it: secrets, vulnerable deps, malicious-code heuristics, author due-diligence, privacy posture, and AI-agent-targeting content, in one graded report.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "RootCawsLLC",
+  "homepage": "https://github.com/RootCawsLLC/repo-recon",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RootCawsLLC/repo-recon.git"
+  },
+  "bin": {
+    "repo-recon": "bin/repo-recon.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"tests/*.test.mjs\"",
+    "demo": "node bin/repo-recon.mjs tests/fixtures/vuln-repo --format markdown --offline"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "security",
+    "scanner",
+    "supply-chain",
+    "secrets",
+    "osv",
+    "owasp",
+    "prompt-injection",
+    "mcp",
+    "repository",
+    "due-diligence"
+  ]
+}
