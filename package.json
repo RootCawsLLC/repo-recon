@@ -17,7 +17,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test \"tests/*.test.mjs\"",
+    "test": "node --test",
     "demo": "node bin/repo-recon.mjs tests/fixtures/vuln-repo --format markdown --offline"
   },
   "files": [

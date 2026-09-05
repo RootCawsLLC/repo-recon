@@ -32,7 +32,7 @@ It is designed to run two ways:
 ```bash
 git clone https://github.com/RootCawsLLC/repo-recon
 cd repo-recon
-node --test "tests/*.test.mjs"   # optional: run the suite
+node --test                      # optional: run the suite
 ```
 
 Requires Node ≥ 20. No `npm install` needed — the tool has no runtime dependencies.

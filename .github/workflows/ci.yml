@@ -26,7 +26,7 @@ jobs:
           node-version: ${{ matrix.node }}
       # No dependencies to install - repo-recon is pure Node.
       - name: Unit tests
-        run: node --test "tests/*.test.mjs"
+        run: node --test
       - name: CLI smoke test (offline scan of the fixture)
         run: node bin/repo-recon.mjs tests/fixtures/vuln-repo --offline --format markdown
 
