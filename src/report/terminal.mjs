@@ -31,6 +31,11 @@ export function renderTerminal(report) {
       ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].map((s) => `${sev(s).trim()} ${sc[s]}`).join('  '),
   );
   out.push(dim(`Files scanned: ${report.stats.filesScanned}   Dependencies checked: ${report.stats.dependenciesChecked}   Tools: ${report.stats.tools.join(', ')}`));
+  const kevCount = report.scanners['dep-check']?.knownExploited || 0;
+  if (kevCount > 0) {
+    out.push('');
+    out.push(c('41;97', ` KEV `) + ' ' + c('31', bold(`${kevCount} dependency vuln(s) are ACTIVELY EXPLOITED (CISA KEV) - patch before anything else.`)));
+  }
   out.push('');
 
   if (report.owaspBreakdown.length) {

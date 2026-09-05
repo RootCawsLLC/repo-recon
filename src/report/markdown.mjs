@@ -32,6 +32,13 @@ export function renderMarkdown(report) {
       ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].map((s) => `${s} ${sc[s]}`).join(' · '),
   );
   L.push('');
+  const kevCount = report.scanners['dep-check']?.knownExploited || 0;
+  if (kevCount > 0) {
+    L.push(
+      `> ⚠ **${kevCount} dependency ${kevCount === 1 ? 'vulnerability is' : 'vulnerabilities are'} in CISA's Known Exploited Vulnerabilities catalog** — confirmed exploited in the wild. Patch ${kevCount === 1 ? 'it' : 'these'} before anything else; see the \`[KEV]\` findings below.`,
+    );
+    L.push('');
+  }
   const agentFindings = report.findings.filter((f) => f.tool === 'agent-targeting').length;
   const ag = report.scanners['agent-targeting'];
   L.push('### AI agent-targeting content');

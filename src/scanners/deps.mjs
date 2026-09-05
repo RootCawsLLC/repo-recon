@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { makeFinding } from '../finding.mjs';
 import { cvssToSeverity } from '../severity.mjs';
 import { cvssScore } from '../cvss.mjs';
+import { fetchKev, fetchEpss, applyExploitIntel } from '../exploit-intel.mjs';
 
 const OSV_BATCH = 'https://api.osv.dev/v1/querybatch';
 const OSV_VULN = 'https://api.osv.dev/v1/vulns/';
@@ -121,6 +122,24 @@ async function collectPackages(dir, files) {
   return [...seen.values()];
 }
 
+// CVE ids can live in several places on an OSV record: `aliases`, `related`, or
+// only in the reference URLs (as with the React2Shell advisory, whose CVE is not
+// an alias). Gather from all three structured fields - but not from free-text
+// prose, to avoid attributing a CVE that is merely mentioned in passing.
+const CVE_RE = /CVE-\d{4}-\d{4,7}/gi;
+function collectCves(vuln) {
+  const out = new Set();
+  const add = (s) => {
+    if (s && /^CVE-/i.test(s)) out.add(s.toUpperCase());
+  };
+  for (const a of vuln.aliases || []) add(a);
+  for (const a of vuln.related || []) add(a);
+  for (const ref of vuln.references || []) {
+    for (const m of String(ref.url || '').matchAll(CVE_RE)) out.add(m[0].toUpperCase());
+  }
+  return [...out];
+}
+
 function severityOfVuln(vuln) {
   // Prefer a CVSS vector -> numeric score -> band.
   const vec = (vuln.severity || []).find((s) => /CVSS_V3/i.test(s.type))?.score;
@@ -205,24 +224,36 @@ export async function scan(ctx) {
   for (const [id, { pkgs }] of idToPkgs) {
     const vuln = details.get(id) || { id };
     const { severity } = severityOfVuln(vuln);
+    const cves = collectCves(vuln);
     // one finding per (advisory, package) pair, like the report
     const uniquePkgs = new Map(pkgs.map((p) => [`${p.name}@${p.version}`, p]));
     for (const p of uniquePkgs.values()) {
-      findings.push(
-        makeFinding({
-          tool: 'deps',
-          severity,
-          title: `Vulnerable dependency: ${p.name}@${p.version} (${id})`,
-          owasp: 'A06',
-          cwe: 'CWE-1104',
-          location: { file: p.source, line: null, snippet: `${p.name}@${p.version}` },
-          detail:
-            (vuln.summary || `Known advisory ${id} affects ${p.name}@${p.version}.`) +
-            ` Source: OSV.dev advisory database.`,
-          remediation: `Upgrade "${p.name}" to a patched version. See https://osv.dev/vulnerability/${id}`,
-        }),
-      );
+      const finding = makeFinding({
+        tool: 'deps',
+        severity,
+        title: `Vulnerable dependency: ${p.name}@${p.version} (${id})`,
+        owasp: 'A06',
+        cwe: 'CWE-1104',
+        location: { file: p.source, line: null, snippet: `${p.name}@${p.version}` },
+        detail:
+          (vuln.summary || `Known advisory ${id} affects ${p.name}@${p.version}.`) +
+          ` Source: OSV.dev advisory database.`,
+        remediation: `Upgrade "${p.name}" to a patched version. See https://osv.dev/vulnerability/${id}`,
+      });
+      finding.cves = cves;
+      findings.push(finding);
     }
+  }
+
+  // Enrich with real-world exploitation signals (CISA KEV + EPSS). This is what
+  // separates "theoretically vulnerable" from "being attacked right now".
+  const allCves = findings.flatMap((f) => f.cves || []);
+  if (allCves.length) {
+    const [kevSet, epssMap] = await Promise.all([fetchKev(), fetchEpss(allCves)]);
+    const intel = applyExploitIntel(findings, { kevSet, epssMap });
+    summary.knownExploited = intel.knownExploited;
+    summary.highEpss = intel.highEpss;
+    summary.kevAvailable = intel.kevAvailable;
   }
 
   summary.vulnerabilities = findings.length;

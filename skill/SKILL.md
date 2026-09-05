@@ -67,6 +67,23 @@ version→advisory matches) but sanity-check that the flagged version is really 
 one pinned in the lockfile, and note when a dev-only dependency lowers real-world
 impact.
 
+**Exploit intelligence.** Dependency findings are enriched with two signals:
+
+- `[KEV]` in the title means the CVE is in **CISA's Known Exploited
+  Vulnerabilities catalog** — confirmed exploited in the wild. These are
+  escalated to CRITICAL. Treat them as emergencies, ahead of higher-CVSS findings
+  that are only theoretical. Lead the report with them.
+- **EPSS** percentages (in the detail) estimate the probability of exploitation
+  in the next 30 days. A high EPSS on a "medium" CVE is a real near-term risk.
+
+For a KEV or otherwise-critical dependency CVE, do not stop at the version match —
+**check whether the app's configuration actually makes it reachable**, and say
+which case applies. For example, Next.js `CVE-2025-29927` (middleware auth
+bypass) is a *total* gate bypass only if authorization is enforced in
+`middleware.ts`; if the gate lives in route handlers or server actions the
+practical impact is much lower. Open the relevant files and state the real
+exposure, not just the CVE.
+
 ## 3. Re-grade if you changed severities
 
 If verification changed any severity, recompute the grade the same way the tool

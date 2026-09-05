@@ -70,7 +70,7 @@ Set `GITHUB_TOKEN` (or `REPO_RECON_GITHUB_TOKEN`) to raise the GitHub API rate l
 | Scanner | Looks for | OWASP |
 | --- | --- | --- |
 | `secrets` | hardcoded credentials — AWS/GitHub/Slack/Stripe/Google keys, private-key blocks, JWTs, `secret = "literal"` assignments | A02 |
-| `dep-check` | known-vulnerable dependency versions, via the OSV.dev advisory DB (npm, PyPI, Go) | A06 |
+| `dep-check` | known-vulnerable dependency versions, via the OSV.dev advisory DB (npm, PyPI, Go), **enriched with CISA KEV** (known-exploited → escalated to CRITICAL, tagged `[KEV]`) and **EPSS** (30-day exploitation probability) | A06 |
 | `heuristics` | `curl \| bash`, `eval(atob(...))`, remote `require()`, install-time scripts that fetch/exec, `pull_request_target` + secrets, cloud-credential file reads, cryptominer strings, typosquatted deps | A08 |
 | `author-check` | repo age, stars/forks, license, owner account age and track record | A08 |
 | `issues-check` | open issues whose titles read like unresolved security/data reports | — |
