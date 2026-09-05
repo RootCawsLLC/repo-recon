@@ -1,0 +1,7 @@
+# Planted compose misconfigs for repo-recon tests.
+services:
+  app:
+    image: myapp:latest
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

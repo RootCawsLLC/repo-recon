@@ -4,7 +4,8 @@ description: >-
   Verify a repository's safety before you trust it. Use to vet a third-party
   GitHub repo BEFORE cloning or running it, or to gate your own repo BEFORE a
   deploy/release/"ship it". Runs the repo-recon scanner (hardcoded secrets,
-  vulnerable dependencies via OSV.dev, malicious-code heuristics, author/repo
+  vulnerable dependencies via OSV.dev, malicious-code heuristics, container & IaC
+  misconfigurations, author/repo
   due-diligence, privacy posture, and AI-agent-targeting content — prompt
   injection, hidden Unicode, rogue MCP endpoints), then verifies each finding
   against the real source file, downgrades false positives, and writes a tiered

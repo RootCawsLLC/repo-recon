@@ -11,12 +11,14 @@ import * as author from './scanners/author.mjs';
 import * as issues from './scanners/issues.mjs';
 import * as privacy from './scanners/privacy.mjs';
 import * as agent from './scanners/agent.mjs';
+import * as infra from './scanners/infra.mjs';
 
 // Tool label -> module. Order here is the order they run and report in.
 const SCANNERS = [
   ['secrets', keyscan],
   ['dep-check', deps],
   ['heuristics', heuristics],
+  ['infra', infra],
   ['author-check', author],
   ['issues-check', issues],
   ['privacy', privacy],

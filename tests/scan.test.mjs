@@ -48,6 +48,27 @@ test('privacy scan flags fixtures-PII and missing privacy doc', () => {
   assert.equal(pii.status, 'flagged');
 });
 
+test('infra scanner flags an unpinned base image and root container', () => {
+  const infra = report.findings.filter((f) => f.tool === 'infra');
+  assert.ok(infra.some((f) => /Unpinned container base image/i.test(f.title)), 'expected unpinned base image');
+  assert.ok(infra.some((f) => /runs as root/i.test(f.title)), 'expected runs-as-root finding');
+});
+
+test('infra scanner flags privileged compose and docker socket as HIGH', () => {
+  const infra = report.findings.filter((f) => f.tool === 'infra');
+  const priv = infra.find((f) => /privileged/i.test(f.title));
+  const sock = infra.find((f) => /docker socket/i.test(f.title));
+  assert.ok(priv && priv.severity === 'HIGH', 'expected privileged HIGH');
+  assert.ok(sock && sock.severity === 'HIGH', 'expected docker-socket HIGH');
+});
+
+test('infra scanner flags public RDS, public S3 ACL, and open security group', () => {
+  const infra = report.findings.filter((f) => f.tool === 'infra');
+  assert.ok(infra.some((f) => /publicly accessible/i.test(f.title)), 'expected public RDS');
+  assert.ok(infra.some((f) => /S3 bucket ACL is public/i.test(f.title)), 'expected public S3 ACL');
+  assert.ok(infra.some((f) => /0\.0\.0\.0\/0/.test(f.title)), 'expected open security group');
+});
+
 test('offline dep-check degrades gracefully', () => {
   assert.match(report.scanners['dep-check'].error || '', /offline/i);
 });
