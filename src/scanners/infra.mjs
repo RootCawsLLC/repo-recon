@@ -155,25 +155,123 @@ const TF_PATTERNS = [
     detail: 'A Block Public Access control is turned off, allowing a bucket or object to become public.',
     remediation: 'Leave all four Block Public Access settings enabled unless a specific, reviewed reason requires otherwise.',
   },
-  {
-    re: /"Action"\s*[:=]\s*"\*"|Action\s*=\s*\[?\s*"\*"/i,
-    severity: 'MEDIUM',
-    owasp: 'A05',
-    cwe: 'CWE-732',
-    title: 'IAM policy allows all actions ("*")',
-    detail: 'An IAM statement grants Action "*" - far broader than least privilege.',
-    remediation: 'Scope the policy to the specific actions (and resources) the principal needs.',
-  },
-  {
-    re: /cidr_blocks\s*=\s*\[?\s*"0\.0\.0\.0\/0"/i,
-    severity: 'MEDIUM',
-    owasp: 'A05',
-    cwe: 'CWE-284',
-    title: 'Security group open to the entire internet (0.0.0.0/0)',
-    detail: 'An ingress rule allows 0.0.0.0/0. If it fronts SSH/RDP/a database port, the service is exposed to the whole internet.',
-    remediation: 'Restrict the CIDR to known ranges; never expose management or database ports to 0.0.0.0/0.',
-  },
 ];
+
+// Ports where internet-wide exposure is a real problem (management/databases).
+const SENSITIVE_PORTS = new Set([
+  22, 23, 21, 3389, 3306, 5432, 1433, 1521, 6379, 27017, 9200, 9300, 5601, 2379, 11211, 5900, 5984, 8020, 9000,
+]);
+// Ports where 0.0.0.0/0 is the whole point (public web).
+const WEB_PORTS = new Set([80, 443]);
+
+// Security groups: 0.0.0.0/0 severity depends on the port it exposes. Line-based,
+// so infer the port from from_port/to_port/protocol in the surrounding block.
+function scanOpenSg(file, push) {
+  const ls = lines(file.text);
+  ls.forEach((l, i) => {
+    if (!/cidr_blocks\s*=\s*\[?\s*"0\.0\.0\.0\/0"/i.test(l)) return;
+    // Attribute ports to the NEAREST assignment to this cidr line, so an
+    // adjacent ingress block (e.g. a 443 block next to a 22 block) doesn't bleed.
+    let fromPort = null;
+    let toPort = null;
+    let proto = null;
+    let dFrom = Infinity;
+    let dTo = Infinity;
+    let dProto = Infinity;
+    for (let j = Math.max(0, i - 10); j <= Math.min(ls.length - 1, i + 10); j++) {
+      const d = Math.abs(j - i);
+      const fp = ls[j].match(/from_port\s*=\s*(\d+)/i);
+      if (fp && d < dFrom) {
+        fromPort = Number(fp[1]);
+        dFrom = d;
+      }
+      const tp = ls[j].match(/to_port\s*=\s*(\d+)/i);
+      if (tp && d < dTo) {
+        toPort = Number(tp[1]);
+        dTo = d;
+      }
+      const pr = ls[j].match(/protocol\s*=\s*"?([\w-]+)"?/i);
+      if (pr && d < dProto) {
+        proto = pr[1].toLowerCase();
+        dProto = d;
+      }
+    }
+    const line = i + 1;
+    const snippet = l.trim().slice(0, 100);
+    const allPorts = proto === '-1' || (fromPort === 0 && (toPort === 0 || toPort >= 65535));
+    const base = {
+      title: 'Security group open to the entire internet (0.0.0.0/0)',
+      owasp: 'A05',
+      cwe: 'CWE-284',
+      line,
+      snippet,
+      remediation: 'Restrict the CIDR to known ranges; never expose management or database ports to 0.0.0.0/0.',
+    };
+    if (allPorts) {
+      push({ ...base, severity: 'HIGH', detail: 'An ingress rule opens ALL ports to 0.0.0.0/0 (the entire internet).' });
+    } else if (fromPort != null && SENSITIVE_PORTS.has(fromPort)) {
+      push({ ...base, severity: 'HIGH', detail: `An ingress rule exposes port ${fromPort} (a management/database port) to 0.0.0.0/0 (the entire internet).` });
+    } else if (fromPort != null && WEB_PORTS.has(fromPort)) {
+      // Public web listener - expected. Report for awareness only; don't score it.
+      push({
+        severity: 'INFO',
+        contextOnly: true,
+        title: `Public web ingress on port ${fromPort} (0.0.0.0/0)`,
+        owasp: 'A05',
+        cwe: 'CWE-284',
+        line,
+        snippet,
+        detail: `Port ${fromPort} is open to 0.0.0.0/0. For a public HTTP/HTTPS listener this is expected; noted for awareness.`,
+        remediation: 'No action if this is a public web endpoint; otherwise restrict the CIDR.',
+      });
+    } else {
+      push({ ...base, severity: 'MEDIUM', detail: `An ingress rule allows 0.0.0.0/0${fromPort != null ? ` on port ${fromPort}` : ''}. Confirm the exposed service is meant to be public.` });
+    }
+  });
+}
+
+// IAM Action:"*" - materially different when the statement carries a Condition
+// (e.g. a break-glass principal-tag gate) versus an unconditional grant.
+function scanIamWildcard(file, push) {
+  const ls = lines(file.text);
+  ls.forEach((l, i) => {
+    if (!/("Action"\s*[:=]\s*"\*"|Action\s*=\s*\[?\s*"\*")/i.test(l)) return;
+    const line = i + 1;
+    const snippet = l.trim().slice(0, 100);
+    let hasCondition = false;
+    // Look within the same statement (forward-biased) for a Condition.
+    for (let j = Math.max(0, i - 3); j <= Math.min(ls.length - 1, i + 8); j++) {
+      if (/\bCondition\b\s*[:=]/i.test(ls[j])) {
+        hasCondition = true;
+        break;
+      }
+    }
+    if (hasCondition) {
+      push({
+        severity: 'INFO',
+        contextOnly: true,
+        title: 'IAM policy allows all actions ("*") but is condition-gated',
+        owasp: 'A05',
+        cwe: 'CWE-732',
+        line,
+        snippet,
+        detail: 'An IAM statement grants Action "*" but carries a Condition (e.g. a break-glass principal tag) that constrains when it applies. Review that the condition is tight.',
+        remediation: 'Confirm the Condition is narrow and intended; prefer scoped actions where practical.',
+      });
+    } else {
+      push({
+        severity: 'MEDIUM',
+        title: 'IAM policy allows all actions ("*")',
+        owasp: 'A05',
+        cwe: 'CWE-732',
+        line,
+        snippet,
+        detail: 'An IAM statement grants Action "*" with no Condition - far broader than least privilege.',
+        remediation: 'Scope the policy to the specific actions (and resources) the principal needs.',
+      });
+    }
+  });
+}
 
 function scanPatterns(file, patterns, tool, push) {
   const ls = lines(file.text);
@@ -216,6 +314,7 @@ export async function scan(ctx) {
           location: { file: file.rel, line: f.line ?? null, snippet: f.snippet },
           detail: f.detail,
           remediation: f.remediation,
+          contextOnly: f.contextOnly,
         }),
       );
 
@@ -228,6 +327,8 @@ export async function scan(ctx) {
     } else if (isTerraform(file.rel)) {
       tfFiles++;
       scanPatterns(file, TF_PATTERNS, 'infra', push);
+      scanOpenSg(file, push);
+      scanIamWildcard(file, push);
     }
   }
 

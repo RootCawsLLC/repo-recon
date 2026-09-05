@@ -27,6 +27,8 @@ function isEnvOrRef(v) {
   if (NOT_A_SECRET.test(s)) return true;
   if (/\benv\b|process\.env|getenv|secret[_-]?manager|vault/i.test(s)) return true;
   if (s.includes('${') || s.includes('{{')) return true;
+  // AWS documentation placeholders (…EXAMPLE / …EXAMPLEKEY) are not real secrets.
+  if (/EXAMPLE/.test(s)) return true;
   return false;
 }
 
@@ -40,6 +42,9 @@ export async function scan(ctx) {
       let m;
       while ((m = pat.re.exec(text)) != null) {
         const raw = pat.group ? m[pat.group] : m[0];
+        // AWS reserves the "EXAMPLE" suffix for documentation placeholders
+        // (AKIAIOSFODNN7EXAMPLE, wJalrXUtnFEMI...EXAMPLEKEY); never a real secret.
+        if (/EXAMPLE/.test(raw)) continue;
         findings.push(
           makeFinding({
             tool: 'secrets',

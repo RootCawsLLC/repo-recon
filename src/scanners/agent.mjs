@@ -93,22 +93,39 @@ export async function scan(ctx) {
       }
     }
 
-    // 2. Invisible / smuggling Unicode
+    // 2. Invisible / smuggling Unicode. A leading BOM is a benign encoding
+    // artifact (skip it); a BOM elsewhere is low-signal (often BOM-handling code);
+    // zero-width / bidi / Unicode-Tag characters are the real smuggling vectors
+    // and stay HIGH - and win over a BOM when both are present.
     SMUGGLING.lastIndex = 0;
-    const hit = SMUGGLING.exec(text);
-    if (hit) {
-      const cp = hit[0].codePointAt(0);
+    let chosen = null;
+    let sm;
+    while ((sm = SMUGGLING.exec(text)) != null) {
+      const cp = sm[0].codePointAt(0);
+      const isBom = cp === 0xfeff;
+      if (isBom && sm.index === 0) continue; // benign leading BOM
+      if (!chosen) chosen = { index: sm.index, cp, isBom };
+      if (!isBom) {
+        chosen = { index: sm.index, cp, isBom };
+        break;
+      }
+    }
+    if (chosen) {
+      const { index, cp, isBom } = chosen;
       findings.push(
         makeFinding({
           tool: 'agent-targeting',
-          severity: 'HIGH',
-          title: 'Hidden or invisible Unicode characters',
+          severity: isBom ? 'LOW' : 'HIGH',
+          title: isBom ? 'Byte-order mark (BOM) inside file content' : 'Hidden or invisible Unicode characters',
           owasp: 'A03',
           cwe: 'CWE-1007',
-          location: { file: file.rel, line: lineAt(text, hit.index), snippet: charName(cp) },
-          detail:
-            'The file contains invisible/format/bidi/Unicode-Tag characters. These render as nothing but are still read by AI models, and are used to smuggle hidden instructions past human reviewers.',
-          remediation: 'Strip the invisible characters and re-review the visible text. Legitimate prose almost never needs them.',
+          location: { file: file.rel, line: lineAt(text, index), snippet: charName(cp) },
+          detail: isBom
+            ? 'A BOM (U+FEFF) appears inside the file rather than only at its start. Usually a harmless encoding artifact (e.g. an Excel-exported CSV, or code that strips a BOM), but confirm it is not altering how text is parsed.'
+            : 'The file contains invisible/format/bidi/Unicode-Tag characters. These render as nothing but are still read by AI models, and are used to smuggle hidden instructions past human reviewers.',
+          remediation: isBom
+            ? 'If the BOM is unintended, strip it. If it is deliberately handled (e.g. BOM-stripping code), no action is needed.'
+            : 'Strip the invisible characters and re-review the visible text. Legitimate prose almost never needs them.',
         }),
       );
     }
